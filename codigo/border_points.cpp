@@ -19,61 +19,123 @@
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
+#include "nav2_costmap_2d/costmap_2d.hpp"
 
-using std::placeholders::_1;
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "nav2_msgs/action/navigate_to_pose.hpp"
+
+#include <memory>
+#include <cmath>
+#include <thread>
+#include <functional>
+
+using namespace std;
+
+// using std::placeholders::_1;
+// using std::placeholders::_2;
+
+using namespace std::placeholders;
+
 using namespace std::chrono_literals;
 
 
 class MyNode : public rclcpp::Node
 {
 public:
+
+  using NavigateToPose = nav2_msgs::action::NavigateToPose;
+  using GoalHandleNavigateToPose_s_ = rclcpp_action::ServerGoalHandle<NavigateToPose>;
+  using GoalHandleNavigateToPose_c_ = rclcpp_action::ClientGoalHandle<NavigateToPose>;
+
   MyNode(const std::string & name, const std::chrono::nanoseconds & rate)
   : Node(name)
   {
     // se subscribe al mapa 
-    sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
-      "/map", 10, std::bind(&MyNode::callback, this, _1));
+    sub_map_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
+      "/map", 10, std::bind(&MyNode::callback_map, this, _1));
+
+    // se subscribe a la posicion del robot en el mundo, no en el mapa
+    sub_robot_pos_ = create_subscription<nav_msgs::msg::Odometry>(
+      "/odom", 10, std::bind(&MyNode::callback_pos, this, _1));
     
     // publica visual markers
-    pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("/mis_markers", 10);
-    timer_ = create_wall_timer(
-      rate, std::bind(&MyNode::timer_callback, this));
+    pub_markers_ = create_publisher<visualization_msgs::msg::MarkerArray>("/mis_markers", 10);
+    timer_markers_ = create_wall_timer(
+      rate, std::bind(&MyNode::timer_callback_markers, this));
+    
+    pub_goal_marker_ = create_publisher<visualization_msgs::msg::Marker>("/mi_marker_goal", 10);
+    timer_goal_marker_ = create_wall_timer(
+      rate, std::bind(&MyNode::timer_callback_goal_marker, this));
+
   }
 
-  void timer_callback()
+  // creamos la accion navigate_to_pose
+  // An “action client” node sends a goal to an “action server” node that acknowledges the goal and returns a stream of feedback and a result.
+  // servidor
+  // void start_server() 
+  // {
+  //   navigate_to_pose_action_server_ = rclcpp_action::create_server<NavigateToPose>(
+  //     shared_from_this(),
+  //     "navigate_to_pose",
+  //     std::bind(&MyNode::handle_goal, this, _1, _2),
+  //     std::bind(&MyNode::handle_cancel, this, _1),
+  //     std::bind(&MyNode::handle_accepted, this, _1));
+  // }
+
+  // cliente
+  void start_client() 
   {
-    visualization_msgs::msg::MarkerArray total_markers_unknown_;
+    navigate_to_pose_action_client_ = rclcpp_action::create_client<NavigateToPose>(
+      shared_from_this(), "navigate_to_pose");
+    
+    if (!this->navigate_to_pose_action_client_->wait_for_action_server(std::chrono::seconds(10))) {
+      RCLCPP_ERROR(get_logger(), "Action server not available after waiting");
+      return;
+    }  
+  }
+
+  void call_server() 
+  {
+    auto goal_pose = NavigateToPose::Goal();
+
+    goal_pose.pose.pose = goal_pos_;
+
+    auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
+
+    // send_goal_options.goal_response_callback =
+    //   std::bind(&MyNode::goal_response_callback, this, _1);
+
+    send_goal_options.feedback_callback =
+      std::bind(&MyNode::feedback_callback, this, _1, _2);
+
+    send_goal_options.result_callback =
+      std::bind(&MyNode::result_callback, this, _1);
+    
+    auto goal_handle_future = navigate_to_pose_action_client_->async_send_goal(
+      goal_pose, send_goal_options);
+
+    if (rclcpp::spin_until_future_complete(shared_from_this(), goal_handle_future) !=
+      rclcpp::executor::FutureReturnCode::SUCCESS)
+    {
+      RCLCPP_ERROR(get_logger(), "send_goal failed");
+      return;
+    }
+
+    auto goal_handle = goal_handle_future.get();
+    if (!goal_handle) {
+      RCLCPP_ERROR(
+        get_logger(), "ExecutorClient: Execution was rejected by the action server");
+      return;
+    }
+  }
+
+  void timer_callback_markers()
+  {
     visualization_msgs::msg::MarkerArray total_markers_unknown_limit_;
 
-    for (int i = 0; i < int(pose_array_unknown_.poses.size()); i++) {
-      visualization_msgs::msg::Marker marker;
-      marker.type = visualization_msgs::msg::Marker::SPHERE;
-      marker.action = visualization_msgs::msg::Marker::ADD;
-
-      marker.header.frame_id = "map";
-      // marker.header.stamp = ros::Time::now();
-      marker.id = i;
-      marker.lifetime.sec = 5;
-      marker.pose.position.x = pose_array_unknown_.poses[i].position.x;
-      marker.pose.position.y = pose_array_unknown_.poses[i].position.y;
-      marker.pose.position.z = 0.0;
-      marker.pose.orientation.x = 0.0;
-      marker.pose.orientation.y = 0.0;
-      marker.pose.orientation.z = 0.0;
-      marker.pose.orientation.w = 1.0;
-
-      marker.scale.x = 0.05;
-      marker.scale.y = 0.05;
-      marker.scale.z = 0.05;
-      marker.color.a = 1.0; // Don't forget to set the alpha! or your marker will be invisible!
-      marker.color.r = 1.0;
-      marker.color.g = 0.5;
-      marker.color.b = 0.0;
-
-      total_markers_unknown_.markers.push_back(marker);
-    }
     for (int i = 0; i < int(pose_array_unknown_limit_.poses.size()); i++) {
       visualization_msgs::msg::Marker marker;
       marker.type = visualization_msgs::msg::Marker::SPHERE;
@@ -81,7 +143,7 @@ public:
 
       marker.header.frame_id = "map";
       // marker.header.stamp = ros::Time::now();
-      marker.id = i + int(pose_array_unknown_.poses.size());
+      marker.id = i;
       marker.lifetime.sec = 5;
       marker.pose.position.x = pose_array_unknown_limit_.poses[i].position.x;
       marker.pose.position.y = pose_array_unknown_limit_.poses[i].position.y;
@@ -102,40 +164,71 @@ public:
       total_markers_unknown_limit_.markers.push_back(marker);
     }
 
-    pub_->publish(total_markers_unknown_);
-    pub_->publish(total_markers_unknown_limit_);
+    pub_markers_->publish(total_markers_unknown_limit_);
 
-    pose_array_unknown_.poses.clear();
     pose_array_unknown_limit_.poses.clear();
 
-    RCLCPP_INFO(this->get_logger(), "publicamos markers");
   }
 
-  bool check_if_limit(float x, float y, int map_width, int map_height, nav_msgs::msg::OccupancyGrid::SharedPtr msg) 
+  void timer_callback_goal_marker()
+  {
+    visualization_msgs::msg::Marker marker;
+    marker.type = visualization_msgs::msg::Marker::SPHERE;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+
+    marker.header.frame_id = "map";
+    // marker.header.stamp = ros::Time::now();
+    marker.id = 1 + int(pose_array_unknown_limit_.poses.size());
+    marker.lifetime.sec = 5;
+    marker.pose.position.x = goal_pos_.position.x;
+    marker.pose.position.y = goal_pos_.position.y;
+    marker.pose.position.z = 0.0;
+    marker.pose.orientation.x = 0.0;
+    marker.pose.orientation.y = 0.0;
+    marker.pose.orientation.z = 0.0;
+    marker.pose.orientation.w = 1.0;
+
+    marker.scale.x = 0.05;
+    marker.scale.y = 0.05;
+    marker.scale.z = 0.05;
+    marker.color.a = 1.0; // Don't forget to set the alpha! or your marker will be invisible!
+    marker.color.r = 0.0;
+    marker.color.g = 1.0;
+    marker.color.b = 0.0;
+ 
+    pub_goal_marker_->publish(marker);
+
+  }
+
+  bool check_if_limit(float x, float y, int map_width, int map_height) 
   {
     // comprobamos que no vamos a ver un dato fuera del mapa 
     if(x + 1 < map_width) {
-      int value_left = msg->data[map_width * (map_height - y - 1) + (x+1)];
+      char char_value = mapa_costmap_.getCost(x+1, y);
+      int value_left = int(char_value);
       if(value_left != -1) {
         // si uno de nuestros vecinos es distinto de -1 quiere decir que nuestro punto es un limite a los desconocidos 
         return true;
       }
     }
     if(x - 1 > -1) {
-      int value_right = msg->data[map_width * (map_height - y - 1) + (x-1)];
+      char char_value = mapa_costmap_.getCost(x-1, y);
+      int value_right = int(char_value);
       if(value_right != -1) {
         return true;
       }
     }
     if(y + 1 < map_height) {
-      int value_up = msg->data[map_width * (map_height - (y+1) - 1) + x];
+      char char_value = mapa_costmap_.getCost(x, y+1);
+      int value_up = int(char_value);
       if(value_up != -1) {
         // si uno de nuestros vecinos es distinto de -1 quiere decir que nuestro punto es un limite a los desconocidos 
         return true;
       }
     }
     if(y - 1 > -1) {
-      int value_down = msg->data[map_width * (map_height - (y-1) - 1) + x];
+      char char_value = mapa_costmap_.getCost(x, y-1);
+      int value_down = int(char_value);
       if(value_down != -1) {
         // si uno de nuestros vecinos es distinto de -1 quiere decir que nuestro punto es un limite a los desconocidos 
         return true;
@@ -144,32 +237,75 @@ public:
     return false; 
   }
 
-
-private:
-  void callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) 
+  void occupancygrid_to_costmap(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
   {
-    pose_array_unknown_.poses.clear();
-    pose_array_unknown_limit_.poses.clear();
     float map_resolution = msg->info.resolution;  // resolution [m/cell]
     int map_width = msg->info.width;    // ancho
     int map_height = msg->info.height;  // alto
     float origin_x = msg->info.origin.position.x;
     float origin_y = msg->info.origin.position.y;
+
+    mapa_costmap_.resizeMap(map_width, map_height, map_resolution, origin_x, origin_y);
+
     for(int x = 0; x < map_width; x++) {
       for(int y = 0; y < map_height; y++) {
-        // size is (step * filas)
-        // probabilities are in the range [0,100].  Unknown is -1.
+        int value = msg->data[map_width * (map_height - y - 1) + x];
+        mapa_costmap_.setCost(x, y, value);       
+      }
+    }
+  }
+
+  void where_to_go()
+  {
+    double less_distance_ = -1;
+
+    for (int i = 0; i < int(pose_array_unknown_limit_.poses.size()); i++) {
+      float x_ = pose_array_unknown_limit_.poses[i].position.x;
+      float y_ = pose_array_unknown_limit_.poses[i].position.y;
+      double distance_ = abs(x_ - robot_pos_.position.x) + abs(y_ - robot_pos_.position.y);
+      if(less_distance_ == -1 || distance_ < less_distance_) {
+        less_distance_ = distance_;
+        goal_pos_.position.x = x_;
+        goal_pos_.position.y = y_;
+      }
+
+    }
+    RCLCPP_INFO(this->get_logger(), "punto deseado: %f %f", goal_pos_.position.x, goal_pos_.position.y);
+  }
+
+private:
+  void callback_map(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) 
+  {
+    
+    pose_array_unknown_.poses.clear();
+    pose_array_unknown_limit_.poses.clear();
+
+    occupancygrid_to_costmap(msg);
+
+    int map_width = mapa_costmap_.getSizeInCellsX();    // ancho
+    int map_height = mapa_costmap_.getSizeInCellsY();  // alto
+    
+    for(int x = 0; x < map_width; x++) {
+      for(int y = 0; y < map_height; y++) {
+
         geometry_msgs::msg::Pose pose_;
-        pose_.position.x = 1 * (x * map_resolution + origin_x);
-        pose_.position.y = -1 * (y * map_resolution + origin_y);
+ 
+        double mux = 0;
+        double muy = 0;
+        mapa_costmap_.mapToWorld(x, y, mux, muy);
+        pose_.position.x = mux;
+        pose_.position.y = -muy;
         pose_.position.z = 0.0;
         pose_.orientation.x = 0.0;
         pose_.orientation.y = 0.0;
         pose_.orientation.z = 0.0;
         pose_.orientation.w = 1.0;
-        int value = msg->data[map_width * (map_height - y - 1) + x];
+
+        char char_value = mapa_costmap_.getCost(x, y); // me lo devuelve en unsigned char y lo paso a char para poder tener -1
+        int value = int(char_value);
+
         if(value == -1) {
-          if (check_if_limit(x, y, map_width, map_height, msg)) {
+          if (check_if_limit(x, y, map_width, map_height)) {
             pose_array_unknown_limit_.poses.push_back(pose_);
           } else {
             pose_array_unknown_.poses.push_back(pose_);
@@ -177,13 +313,142 @@ private:
         }
       }
     }
+    where_to_go();
+
+    // RCLCPP_INFO(this->get_logger(), "llamamos al servidor");
+    // call_server();
+
+    
   }
 
-  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr sub_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_;
-  rclcpp::TimerBase::SharedPtr timer_;
+  void callback_pos(const nav_msgs::msg::Odometry::SharedPtr msg) 
+  {
+    robot_pos_.position.x = msg->pose.pose.position.x;
+    robot_pos_.position.y = msg->pose.pose.position.y;
+    robot_pos_.position.z = msg->pose.pose.position.z;
+  }
+
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr sub_map_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_robot_pos_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_goal_marker_;
+  rclcpp::TimerBase::SharedPtr timer_markers_;
+  rclcpp::TimerBase::SharedPtr timer_goal_marker_;
   geometry_msgs::msg::PoseArray pose_array_unknown_;
   geometry_msgs::msg::PoseArray pose_array_unknown_limit_;
+
+  nav2_costmap_2d::Costmap2D mapa_costmap_;
+
+  geometry_msgs::msg::Pose robot_pos_;
+  geometry_msgs::msg::Pose goal_pos_;
+
+  // rclcpp_action::Server<NavigateToPose>::SharedPtr navigate_to_pose_action_server_;
+  rclcpp_action::Client<NavigateToPose>::SharedPtr navigate_to_pose_action_client_;
+
+  // A callback function for handling goals
+  rclcpp_action::GoalResponse handle_goal(const rclcpp_action::GoalUUID & uuid, std::shared_ptr<const NavigateToPose::Goal> goal)
+  {
+    // This implementation just accepts all goals.
+    RCLCPP_INFO(this->get_logger(), "Received goal request with pose [%f, %f, %f]", goal->pose.pose.position.x, goal->pose.pose.position.y, goal->pose.pose.position.z);
+    (void)uuid;
+    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    // if (goal->times > 0) {
+    //   current_goal_ = *goal;
+    //   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    // } else {
+    //   return rclcpp_action::GoalResponse::REJECT;
+    // }
+  }
+
+  // A callback function for handling cancellation
+  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleNavigateToPose_s_> goal_handle)
+  {
+    // This implementation just tells the client that it accepted the cancellation.
+    RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
+    (void)goal_handle;
+    return rclcpp_action::CancelResponse::ACCEPT;
+  }
+
+  // A callbackstart_client function for handling goal accept
+  void handle_accepted(const std::shared_ptr<GoalHandleNavigateToPose_s_> goal_handle)
+  {
+    // The last of the callbacks accepts a new goal and starts processing it
+    using namespace std::placeholders;
+    // this needs to return quickly to avoid blocking the executor, so spin up a new thread
+    std::thread{std::bind(&MyNode::execute, this, _1), goal_handle}.detach();
+  }
+
+  // All further processing and updates are done in the execute method in the new thread
+  void execute(const std::shared_ptr<GoalHandleNavigateToPose_s_> goal_handle)
+  {
+    RCLCPP_INFO(this->get_logger(), "Executing goal");
+    rclcpp::Rate loop_rate(1);
+    const auto goal = goal_handle->get_goal();
+    auto feedback = std::make_shared<nav2_msgs::action::NavigateToPose::Feedback>();
+    auto & pose = feedback->current_pose;
+    auto & distance = feedback->distance_remaining;
+    auto result = std::make_shared<nav2_msgs::action::NavigateToPose::Result>();
+
+    while (rclcpp::ok())
+    {
+      // Check if there is a cancel request
+      if (goal_handle->is_canceling()) {
+        // result->result = sequence;  // std_msgs/Empty
+        goal_handle->canceled(result);
+        RCLCPP_INFO(this->get_logger(), "Goal canceled");
+        return;
+      }
+
+      // Update feedback
+      pose.pose = robot_pos_;
+      distance = abs(goal->pose.pose.position.x - robot_pos_.position.x) + abs(goal->pose.pose.position.x - robot_pos_.position.y);
+      // Publish feedback
+      goal_handle->publish_feedback(feedback);
+      RCLCPP_INFO(this->get_logger(), "Publish feedback");
+
+      loop_rate.sleep();
+    }
+
+    // Check if goal is done
+    if (rclcpp::ok()) {
+      // result->result = sequence;  // std_msgs/Empty
+      goal_handle->succeed(result);
+      RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+    }
+  }
+
+  // void goal_response_callback(std::shared_future<rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr> future)
+  // {
+  //   auto goal_handle = future.get();
+  //   if (!goal_handle) {
+  //     RCLCPP_ERROR(this->get_logger(), "Goal was rejected by server");
+  //   } else {
+  //     RCLCPP_INFO(this->get_logger(), "Goal accepted by server, waiting for result");
+  //   }
+  // }
+
+  void feedback_callback(GoalHandleNavigateToPose_c_::SharedPtr, const std::shared_ptr<const NavigateToPose::Feedback> feedback)
+  {
+    RCLCPP_INFO(this->get_logger(), "queda una distancia de %f para llegar al objetivo", feedback->distance_remaining);
+  }
+
+  void result_callback(const GoalHandleNavigateToPose_c_::WrappedResult & result)
+  {
+    switch (result.code) {
+      case rclcpp_action::ResultCode::SUCCEEDED:
+        break;
+      case rclcpp_action::ResultCode::ABORTED:
+        RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
+        return;
+      case rclcpp_action::ResultCode::CANCELED:
+        RCLCPP_ERROR(this->get_logger(), "Goal was canceled");
+        return;
+      default:
+        RCLCPP_ERROR(this->get_logger(), "Unknown result code");
+        return;
+    }
+  }
+
 };
 
 
@@ -194,6 +459,10 @@ int main(int argc, char * argv[])
   geometry_msgs::msg::PoseArray pose_array_;
 
   auto node_A = std::make_shared<MyNode>("node_A", 1s);
+
+  // node_A->start_server();
+  node_A->start_client();
+  node_A->call_server();
 
   rclcpp::executors::SingleThreadedExecutor executor;
   
