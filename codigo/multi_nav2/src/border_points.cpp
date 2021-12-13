@@ -34,9 +34,6 @@
 
 using namespace std;
 
-// using std::placeholders::_1;
-// using std::placeholders::_2;
-
 using namespace std::placeholders;
 
 using namespace std::chrono_literals;
@@ -71,19 +68,6 @@ public:
       rate, std::bind(&MyNode::timer_callback_goal_marker, this));
 
   }
-
-  // creamos la accion navigate_to_pose
-  // An “action client” node sends a goal to an “action server” node that acknowledges the goal and returns a stream of feedback and a result.
-  // servidor
-  // void start_server() 
-  // {
-  //   navigate_to_pose_action_server_ = rclcpp_action::create_server<NavigateToPose>(
-  //     shared_from_this(),
-  //     "navigate_to_pose",
-  //     std::bind(&MyNode::handle_goal, this, _1, _2),
-  //     std::bind(&MyNode::handle_cancel, this, _1),
-  //     std::bind(&MyNode::handle_accepted, this, _1));
-  // }
 
   // cliente
   void start_client() 
@@ -342,7 +326,6 @@ private:
   geometry_msgs::msg::Pose robot_pos_;
   geometry_msgs::msg::Pose goal_pos_;
 
-  // rclcpp_action::Server<NavigateToPose>::SharedPtr navigate_to_pose_action_server_;
   rclcpp_action::Client<NavigateToPose>::SharedPtr navigate_to_pose_action_client_;
 
   // A callback function for handling goals
@@ -358,63 +341,6 @@ private:
     // } else {
     //   return rclcpp_action::GoalResponse::REJECT;
     // }
-  }
-
-  // A callback function for handling cancellation
-  rclcpp_action::CancelResponse handle_cancel(const std::shared_ptr<GoalHandleNavigateToPose_s_> goal_handle)
-  {
-    // This implementation just tells the client that it accepted the cancellation.
-    RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
-    (void)goal_handle;
-    return rclcpp_action::CancelResponse::ACCEPT;
-  }
-
-  // A callbackstart_client function for handling goal accept
-  void handle_accepted(const std::shared_ptr<GoalHandleNavigateToPose_s_> goal_handle)
-  {
-    // The last of the callbacks accepts a new goal and starts processing it
-    using namespace std::placeholders;
-    // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-    std::thread{std::bind(&MyNode::execute, this, _1), goal_handle}.detach();
-  }
-
-  // All further processing and updates are done in the execute method in the new thread
-  void execute(const std::shared_ptr<GoalHandleNavigateToPose_s_> goal_handle)
-  {
-    RCLCPP_INFO(this->get_logger(), "Executing goal");
-    rclcpp::Rate loop_rate(1);
-    const auto goal = goal_handle->get_goal();
-    auto feedback = std::make_shared<nav2_msgs::action::NavigateToPose::Feedback>();
-    auto & pose = feedback->current_pose;
-    auto & distance = feedback->distance_remaining;
-    auto result = std::make_shared<nav2_msgs::action::NavigateToPose::Result>();
-
-    while (rclcpp::ok())
-    {
-      // Check if there is a cancel request
-      if (goal_handle->is_canceling()) {
-        // result->result = sequence;  // std_msgs/Empty
-        goal_handle->canceled(result);
-        RCLCPP_INFO(this->get_logger(), "Goal canceled");
-        return;
-      }
-
-      // Update feedback
-      pose.pose = robot_pos_;
-      distance = abs(goal->pose.pose.position.x - robot_pos_.position.x) + abs(goal->pose.pose.position.x - robot_pos_.position.y);
-      // Publish feedback
-      goal_handle->publish_feedback(feedback);
-      RCLCPP_INFO(this->get_logger(), "Publish feedback");
-
-      loop_rate.sleep();
-    }
-
-    // Check if goal is done
-    if (rclcpp::ok()) {
-      // result->result = sequence;  // std_msgs/Empty
-      goal_handle->succeed(result);
-      RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-    }
   }
 
   // void goal_response_callback(std::shared_future<rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr> future)
@@ -460,7 +386,6 @@ int main(int argc, char * argv[])
 
   auto node_A = std::make_shared<MyNode>("node_A", 1s);
 
-  // node_A->start_server();
   node_A->start_client();
   node_A->call_server();
 
