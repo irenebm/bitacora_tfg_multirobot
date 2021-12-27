@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<root main_tree_to_execute="BehaviorTree">
+    <!-- ////////// -->
+    <BehaviorTree ID="BehaviorTree">
+        <Sequence>
+            <RetryUntilSuccesful num_attempts="10">
+                <Sequence>
+                    <Action ID="Explored"/>
+                    <Action ID="SelectPF" waypoint="{pose_pf}"/>
+                    <Action ID="Move" goal="{wp}"/>
+                </Sequence>
+            </RetryUntilSuccesful>
+        </Sequence>
+    </BehaviorTree>
+    <!-- ////////// -->
+    <TreeNodesModel>
+        <Action ID="Explored"/>
+        <Action ID="SelectPF">
+            <output_port name="waypoint"/>
+        </Action>
+        <Action ID="Move">
+            <input_port name="goal"/>
+        </Action>
+    </TreeNodesModel>
+    <!-- ////////// -->
+</root>
+
