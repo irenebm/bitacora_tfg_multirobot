@@ -43,18 +43,19 @@ Explored::halt()
 BT::NodeStatus
 Explored::tick()
 {
+  std::cout << "Explored tick" << std::endl;
   if(num_poses > 0) {
     // si todavía hay puntos desconocidos devuelvo success
-    std::cout << "todavia hay puntos desconocidos " << std::endl;
+    std::cout << "There are unknown points" << std::endl;
     num_poses = -1;
     return BT::NodeStatus::SUCCESS;
   } else if(num_poses == 0) {
     // si no quedan mas pf devuelvo fallo
-    std::cout << "no quedan puntos desconocidos " << std::endl;
+    std::cout << "No unknown points left" << std::endl;
     return BT::NodeStatus::FAILURE;
-  } else {
-    return BT::NodeStatus::RUNNING;
   }
+  
+  return BT::NodeStatus::RUNNING;
 }
 
 void 

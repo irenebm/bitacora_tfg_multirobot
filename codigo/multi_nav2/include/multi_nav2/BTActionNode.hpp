@@ -40,7 +40,7 @@ public:
     node_ = config().blackboard->get<typename NodeT::SharedPtr>("node");
 
     server_timeout_ = 1s;
-   
+
     // Initialize the input and output messages
     goal_ = typename ActionT::Goal();
     result_ = typename rclcpp_action::ClientGoalHandle<ActionT>::WrappedResult();
@@ -128,7 +128,6 @@ public:
   // The main override required by a BT action
   BT::NodeStatus tick() override
   {
-    
     // first step to be done only at the beginning of the Action
     if (status() == BT::NodeStatus::IDLE) {
       createActionClient(action_name_);
@@ -229,6 +228,7 @@ protected:
           result_ = result;
         }
       };
+
     auto future_goal_handle = action_client_->async_send_goal(goal_, send_goal_options);
 
     if (rclcpp::spin_until_future_complete(

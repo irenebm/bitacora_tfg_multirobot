@@ -75,7 +75,7 @@ public:
       marker.header.frame_id = "map";
       // marker.header.stamp = ros::Time::now();
       marker.id = i;
-      marker.lifetime.sec = 5;
+      marker.lifetime.sec = 2;
       marker.pose.position.x = pose_array_unknown_limit_.poses[i].position.x;
       marker.pose.position.y = pose_array_unknown_limit_.poses[i].position.y;
       marker.pose.position.z = 0.0;

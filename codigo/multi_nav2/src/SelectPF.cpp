@@ -56,10 +56,10 @@ SelectPF::tick()
   if(set_goal) {
     set_goal = false;
     setOutput("waypoint", goal_pos_);
-    RCLCPP_INFO(node_->get_logger(), "SelectPF envío: %f %f", goal_pos_.pose.position.x, goal_pos_.pose.position.y);
+    RCLCPP_INFO(node_->get_logger(), "SelectPF sending goal: %f %f", goal_pos_.pose.position.x, goal_pos_.pose.position.y);
     return BT::NodeStatus::SUCCESS;
   } else {
-    std::cout << "aún no tenemos goal " << std::endl;
+    std::cout << "Still don't have a goal " << std::endl;
     return BT::NodeStatus::RUNNING;
   }
   
@@ -122,7 +122,7 @@ SelectPF::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     }
 
   }
-  RCLCPP_INFO(node_->get_logger(), "punto deseado: %f %f", goal_pos_.pose.position.x, goal_pos_.pose.position.y);
+  // RCLCPP_INFO(node_->get_logger(), "punto deseado: %f %f", goal_pos_.pose.position.x, goal_pos_.pose.position.y);
 }
 
 }  // namespace multi_nav2

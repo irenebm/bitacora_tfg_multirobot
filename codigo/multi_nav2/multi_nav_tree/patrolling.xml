@@ -3,15 +3,12 @@
     <!-- ////////// -->
     <BehaviorTree ID="BehaviorTree">
         <KeepRunningUntilFailure>
-            <ReactiveSequence>
-                <Fallback>
-                    <Action ID="Explored"/>
-                </Fallback>
-                <Sequence>
-                    <Action ID="SelectPF" waypoint="{wp}"/>
-                    <Action ID="Move" goal="{wp}"/>
-                </Sequence>
-            </ReactiveSequence>
+            <Sequence>
+                <Action ID="Explored"/>
+                <Action ID="SelectPF" waypoint="{wp}"/>
+                <Action ID="Move" goal="{wp}"/>
+                <Action ID="Explored"/>
+            </Sequence>
         </KeepRunningUntilFailure>
     </BehaviorTree>
     <!-- ////////// -->

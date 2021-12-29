@@ -60,12 +60,14 @@ int main(int argc, char * argv[])
   bool finish = false;
 
   while (!finish && rclcpp::ok()) {
-    std::cout << "dentro del while " << std::endl;
+
     finish = tree.rootNode()->executeTick() == BT::NodeStatus::SUCCESS;
 
     rclcpp::spin_some(node);
     rate.sleep();
   }
+
+  std::cout << "Patrolling finish !!" << std::endl;
 
   rclcpp::shutdown();
   return 0;
