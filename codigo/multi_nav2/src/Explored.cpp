@@ -27,7 +27,7 @@ Explored::Explored(
 : BT::ActionNodeBase(xml_tag_name, conf)
 {
   config().blackboard->get("node", node_);
-  
+
   // se subscribe a las posiciones de los pf que publica check_pf.cpp
   sub_poses_ = node_->create_subscription<geometry_msgs::msg::PoseArray>(
     "/mis_poses", 10, std::bind(&Explored::callback_poses, this, _1));
@@ -44,22 +44,22 @@ BT::NodeStatus
 Explored::tick()
 {
   std::cout << "Explored tick" << std::endl;
-  if(num_poses > 0) {
+  if (num_poses > 0) {
     // si todavía hay puntos desconocidos devuelvo success
     std::cout << "There are unknown points" << std::endl;
     num_poses = -1;
     return BT::NodeStatus::SUCCESS;
-  } else if(num_poses == 0) {
+  } else if (num_poses == 0) {
     // si no quedan mas pf devuelvo fallo
     std::cout << "No unknown points left" << std::endl;
     return BT::NodeStatus::FAILURE;
   }
-  
+
   return BT::NodeStatus::RUNNING;
 }
 
-void 
-Explored::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg) 
+void
+Explored::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg)
 {
   num_poses = int(msg->poses.size());
 }

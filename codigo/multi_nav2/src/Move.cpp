@@ -32,7 +32,9 @@ Move::on_tick()
 {
   geometry_msgs::msg::PoseStamped goal;
   getInput("goal", goal);
-  RCLCPP_INFO(node_->get_logger(), "Move receiving goal: %f %f", goal.pose.position.x, goal.pose.position.y);
+  RCLCPP_INFO(
+    node_->get_logger(), "Move receiving goal: %f %f", goal.pose.position.x,
+    goal.pose.position.y);
 
   goal_.pose = goal;
 }

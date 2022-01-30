@@ -51,7 +51,7 @@ include_directories(include ${ZMQ_INCLUDE_DIRS})
 add_library(explored_bt_node SHARED src/Explored.cpp)
 add_library(move_bt_node SHARED src/Move.cpp)
 add_library(selectpf_bt_node SHARED src/SelectPF.cpp)
-list(APPEND plugin_libs 
+list(APPEND plugin_libs
   explored_bt_node
   move_bt_node
   selectpf_bt_node
@@ -90,7 +90,10 @@ install(DIRECTORY multi_nav_tree
 )
 
 
-# install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

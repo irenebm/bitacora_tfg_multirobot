@@ -50,9 +50,10 @@ public:
 
   static BT::PortsList providedPorts()
   {
-    return BT::PortsList({
-      BT::OutputPort<geometry_msgs::msg::PoseStamped>("waypoint")
-    });
+    return BT::PortsList(
+      {
+        BT::OutputPort<geometry_msgs::msg::PoseStamped>("waypoint")
+      });
   }
 
 private:

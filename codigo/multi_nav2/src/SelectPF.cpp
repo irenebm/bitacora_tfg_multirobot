@@ -28,8 +28,9 @@ SelectPF::SelectPF(
 : BT::ActionNodeBase(xml_tag_name, conf)
 {
   config().blackboard->get("node", node_);
-  
-  pub_goal_marker_ = node_->create_publisher<visualization_msgs::msg::Marker>("/mi_marker_goal", 10);
+
+  pub_goal_marker_ =
+    node_->create_publisher<visualization_msgs::msg::Marker>("/mi_marker_goal", 10);
   timer_goal_marker_ = node_->create_wall_timer(
     1s, std::bind(&SelectPF::timer_callback_goal_marker, this));
 
@@ -53,19 +54,21 @@ BT::NodeStatus
 SelectPF::tick()
 {
   std::cout << "SelectPF tick " << std::endl;
-  if(set_goal) {
+  if (set_goal) {
     set_goal = false;
     setOutput("waypoint", goal_pos_);
-    RCLCPP_INFO(node_->get_logger(), "SelectPF sending goal: %f %f", goal_pos_.pose.position.x, goal_pos_.pose.position.y);
+    RCLCPP_INFO(
+      node_->get_logger(), "SelectPF sending goal: %f %f", goal_pos_.pose.position.x,
+      goal_pos_.pose.position.y);
     return BT::NodeStatus::SUCCESS;
   } else {
     std::cout << "Still don't have a goal " << std::endl;
     return BT::NodeStatus::RUNNING;
   }
-  
+
 }
 
-void 
+void
 SelectPF::timer_callback_goal_marker()
 {
   visualization_msgs::msg::Marker marker;
@@ -96,16 +99,16 @@ SelectPF::timer_callback_goal_marker()
 
 }
 
-void 
-SelectPF::callback_robot_pos(const nav_msgs::msg::Odometry::SharedPtr msg) 
+void
+SelectPF::callback_robot_pos(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
   robot_pos_.position.x = msg->pose.pose.position.x;
   robot_pos_.position.y = msg->pose.pose.position.y;
   robot_pos_.position.z = msg->pose.pose.position.z;
 }
 
-void 
-SelectPF::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg) 
+void
+SelectPF::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg)
 {
   double higher_distance_ = -1;
 
@@ -113,7 +116,7 @@ SelectPF::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     float x_ = msg->poses[i].position.x;
     float y_ = msg->poses[i].position.y;
     double distance_ = abs(x_ - robot_pos_.position.x) + abs(y_ - robot_pos_.position.y);
-    if(higher_distance_ == -1 || distance_ > higher_distance_) {
+    if (higher_distance_ == -1 || distance_ > higher_distance_) {
       higher_distance_ = distance_;
       goal_pos_.pose.position.x = x_;
       goal_pos_.pose.position.y = y_;
