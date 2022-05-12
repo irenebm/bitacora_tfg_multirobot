@@ -52,6 +52,7 @@ private:
   rclcpp::Node::SharedPtr node_;
 
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_poses_;
+
   int num_poses = -1;
 
 };

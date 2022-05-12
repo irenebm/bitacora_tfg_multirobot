@@ -30,17 +30,23 @@ SelectPF::SelectPF(
   config().blackboard->get("node", node_);
 
   pub_goal_marker_ =
-    node_->create_publisher<visualization_msgs::msg::Marker>("/mi_marker_goal", 10);
+    node_->create_publisher<visualization_msgs::msg::Marker>("my_marker_goal", 10);
   timer_goal_marker_ = node_->create_wall_timer(
     1s, std::bind(&SelectPF::timer_callback_goal_marker, this));
 
+  // publica la posicion a la que va a ir
+  pub_goal_pose_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>("pose_goal", 10);
+
+  sub_goal_pose_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
+    "pose_goal", 10, std::bind(&SelectPF::callback_goal_poses_, this, _1));
+
   // se subscribe a la posicion del robot en el mundo, no en el mapa
   sub_robot_pos_ = node_->create_subscription<nav_msgs::msg::Odometry>(
-    "/odom", 10, std::bind(&SelectPF::callback_robot_pos, this, _1));
+    "odom", 10, std::bind(&SelectPF::callback_robot_pos_, this, _1));
 
   // se subscribe a las posiciones de los pf que publica check_pf.cpp
   sub_poses_ = node_->create_subscription<geometry_msgs::msg::PoseArray>(
-    "/mis_poses", 10, std::bind(&SelectPF::callback_poses, this, _1));
+    "poses", 10, std::bind(&SelectPF::callback_poses_, this, _1));
 
 }
 
@@ -54,9 +60,10 @@ BT::NodeStatus
 SelectPF::tick()
 {
   std::cout << "SelectPF tick " << std::endl;
-  if (set_goal) {
-    set_goal = false;
+  if (set_goal_) {
+    set_goal_ = false;
     setOutput("waypoint", goal_pos_);
+    pub_goal_pose_->publish(goal_pos_);
     RCLCPP_INFO(
       node_->get_logger(), "SelectPF sending goal: %f %f", goal_pos_.pose.position.x,
       goal_pos_.pose.position.y);
@@ -100,7 +107,17 @@ SelectPF::timer_callback_goal_marker()
 }
 
 void
-SelectPF::callback_robot_pos(const nav_msgs::msg::Odometry::SharedPtr msg)
+SelectPF::callback_goal_poses_(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+  other_robot_ = true;
+  
+  goal_pos_other_.pose.position.x = msg->pose.position.x;
+  goal_pos_other_.pose.position.y = msg->pose.position.y;
+  goal_pos_other_.pose.position.z = msg->pose.position.z;
+}
+
+void
+SelectPF::callback_robot_pos_(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
   robot_pos_.position.x = msg->pose.pose.position.x;
   robot_pos_.position.y = msg->pose.pose.position.y;
@@ -108,25 +125,41 @@ SelectPF::callback_robot_pos(const nav_msgs::msg::Odometry::SharedPtr msg)
 }
 
 void
-SelectPF::callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg)
+SelectPF::callback_poses_(const geometry_msgs::msg::PoseArray::SharedPtr msg)
 {
   double higher_distance_ = -1;
+  if (other_robot_) {
+    for (int i = 0; i < int(msg->poses.size()); i++) {
+      float x_ = msg->poses[i].position.x;
+      float y_ = msg->poses[i].position.y;
+      double distance_ = abs(x_ - goal_pos_other_.pose.position.x) + abs(y_ - goal_pos_other_.pose.position.y);
+      if (higher_distance_ == -1 || distance_ > higher_distance_) {
+        higher_distance_ = distance_;
+        goal_pos_.header.frame_id = "map";
+        goal_pos_.pose.position.x = x_;
+        goal_pos_.pose.position.y = y_;
 
-  for (int i = 0; i < int(msg->poses.size()); i++) {
-    float x_ = msg->poses[i].position.x;
-    float y_ = msg->poses[i].position.y;
-    double distance_ = abs(x_ - robot_pos_.position.x) + abs(y_ - robot_pos_.position.y);
-    if (higher_distance_ == -1 || distance_ > higher_distance_) {
-      higher_distance_ = distance_;
-      goal_pos_.pose.position.x = x_;
-      goal_pos_.pose.position.y = y_;
-
-      set_goal = true;
+        set_goal_ = true;
+      }
     }
+  } else {
+    for (int i = 0; i < int(msg->poses.size()); i++) {
+      float x_ = msg->poses[i].position.x;
+      float y_ = msg->poses[i].position.y;
+      double distance_ = abs(x_ - robot_pos_.position.x) + abs(y_ - robot_pos_.position.y);
+      if (higher_distance_ == -1 || distance_ > higher_distance_) {
+        higher_distance_ = distance_;
+        goal_pos_.header.frame_id = "map";
+        goal_pos_.pose.position.x = x_;
+        goal_pos_.pose.position.y = y_;
 
+        set_goal_ = true;
+      }
+    }
   }
   // RCLCPP_INFO(node_->get_logger(), "punto deseado: %f %f", goal_pos_.pose.position.x, goal_pos_.pose.position.y);
 }
+
 
 }  // namespace multi_nav2
 

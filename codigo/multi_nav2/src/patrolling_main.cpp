@@ -42,6 +42,15 @@ int main(int argc, char * argv[])
   factory.registerFromPlugin(loader.getOSName("move_bt_node"));
   factory.registerFromPlugin(loader.getOSName("selectpf_bt_node"));
 
+  float publisher_port_;
+  float server_port_;
+
+  node->declare_parameter("publisher_port", 1666.0);
+  node->declare_parameter("server_port", 1667.0);
+
+  node->get_parameter("publisher_port", publisher_port_);
+  node->get_parameter("server_port", server_port_);
+
 
   std::string pkgpath = ament_index_cpp::get_package_share_directory("multi_nav2");
   std::string xml_file = pkgpath + "/multi_nav_tree/patrolling.xml";
@@ -53,7 +62,7 @@ int main(int argc, char * argv[])
   // BT::Tree tree = factory.createTreeFromFile(xml_file);
 
   // BT::PublisherZMQ::PublisherZMQ(const BT::Tree & tree,unsigned max_msg_per_second = 25,unsigned publisher_port = 1666,unsigned server_port = 1667)
-  auto publisher_zmq = std::make_shared<BT::PublisherZMQ>(tree, 10, 2166, 2167);
+  auto publisher_zmq = std::make_shared<BT::PublisherZMQ>(tree, 10, publisher_port_, server_port_);
 
   rclcpp::Rate rate(10);
 
@@ -61,7 +70,7 @@ int main(int argc, char * argv[])
 
   while (!finish && rclcpp::ok()) {
 
-    finish = tree.rootNode()->executeTick() == BT::NodeStatus::SUCCESS;
+    finish = tree.rootNode()->executeTick() == BT::NodeStatus::FAILURE;
 
     rclcpp::spin_some(node);
     rate.sleep();

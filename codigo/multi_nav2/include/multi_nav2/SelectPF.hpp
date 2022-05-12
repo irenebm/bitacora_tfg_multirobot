@@ -45,14 +45,15 @@ public:
   BT::NodeStatus tick();
 
   void timer_callback_goal_marker();
-  void callback_robot_pos(const nav_msgs::msg::Odometry::SharedPtr msg);
-  void callback_poses(const geometry_msgs::msg::PoseArray::SharedPtr msg);
+  void callback_goal_poses_(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void callback_robot_pos_(const nav_msgs::msg::Odometry::SharedPtr msg);
+  void callback_poses_(const geometry_msgs::msg::PoseArray::SharedPtr msg);
 
   static BT::PortsList providedPorts()
   {
     return BT::PortsList(
       {
-        BT::OutputPort<geometry_msgs::msg::PoseStamped>("waypoint")
+        BT::OutputPort<geometry_msgs::msg::PoseStamped>("waypoint"),
       });
   }
 
@@ -62,13 +63,19 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_goal_marker_;
   rclcpp::TimerBase::SharedPtr timer_goal_marker_;
 
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_goal_pose_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_goal_pose_;
+
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_robot_pos_;
   geometry_msgs::msg::Pose robot_pos_;
 
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_poses_;
   geometry_msgs::msg::PoseStamped goal_pos_;
 
-  bool set_goal = false;
+  bool other_robot_ = false;
+  geometry_msgs::msg::PoseStamped goal_pos_other_;
+
+  bool set_goal_ = false;
 
 };
 
