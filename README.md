@@ -1,5 +1,9 @@
 # TFG - Exploración de un entorno multirobot con Nav2 
 
+[![GitHub Action
+Status](https://github.com/irenebm/bitacora_tfg_multirobot/workflows/master/badge.svg)](https://github.com/irenebm/bitacora_tfg_multirobot)
+[![codecov](https://codecov.io/gh/irenebm/bitacora_tfg_multirobot/master/graph/badge.svg)](https://codecov.io/gh/irenebm/bitacora_tfg_multirobot)
+
 <p align="center">
 <img src="https://github.com/irenebm/bitacora_tfg_multirobot/blob/main/wiki/pngwing.com%20(1).png" width="100"/>
 </p>
